@@ -1,0 +1,46 @@
+x-app: &app
+  build: .
+  environment:
+    HOST: 0.0.0.0
+    PG_HOST: pg-primary
+    PG_REPLICA_HOST: pg-replica
+    PG_REPLICA_PORT: "5432"
+    PG_PASSWORD: secret
+    REDIS_URL: redis://redis:6379
+  depends_on: [pg-primary, pg-replica, redis]
+
+services:
+  pg-primary:
+    image: postgres:16
+    command: postgres -c wal_level=replica -c max_wal_senders=10 -c hot_standby=on
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: fleet
+    volumes:
+      - ./init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+    ports: ["5432:5432"]
+
+  pg-replica:
+    image: postgres:16
+    user: postgres
+    depends_on: [pg-primary]
+    environment:
+      PGPASSWORD: repl_pass
+    entrypoint: ["bash","-c","until pg_isready -h pg-primary -U postgres; do sleep 2; done; if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then pg_basebackup -h pg-primary -U repl_user -D /var/lib/postgresql/data -R -X stream -P; fi; chmod 700 /var/lib/postgresql/data; exec postgres"]
+    ports: ["5433:5432"]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  app1:
+    <<: *app
+  app2:
+    <<: *app
+
+  nginx:
+    image: nginx:alpine
+    ports: ["8080:80"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [app1, app2]
