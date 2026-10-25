@@ -8,8 +8,8 @@ on:
       - "*.md"
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # Required for AWS OIDC authentication
+  contents: read    # Required to check out code
 
 env:
   AWS_REGION: us-east-2
@@ -21,14 +21,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::061166140701:role/fleetstream-github-deploy
+          role-to-assume: arn:aws:iam::061166140701:role/Githubaction-OIDC-pipeline
           aws-region: ${{ env.AWS_REGION }}
 
-      - id: ecr
+      - name: Login to Amazon ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push image
